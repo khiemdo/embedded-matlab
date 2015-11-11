@@ -1,0 +1,140 @@
+'***DATE: 8/11/2015
+'***WHO:KHIEM
+'***DESCRIBE:program to test matlab
+
+'**************CONSTANT*******************
+NODEID = 7
+SYSTEM_TIMER_COUNTS=0x7fffffff
+SetTimerCount(0,SYSTEM_TIMER_COUNTS)
+'________For System Clock Timing_________
+lastTimeSendTimelyCanMsg = SYSTEM_TIMER_COUNTS
+
+'**************GLOBAL VARIABLES*******************
+encoder1 = 0
+encoder2 = 0
+velo1=0
+velo2=0
+motorCmd1 = 0 
+motorCmd2 = 0 
+
+'________CANCOM_________
+rStid=0'receiveCANmsg STID
+rDlc=0'receiveCANmsg DLC
+Dim rData[8] As Integer'receiveCANmsg payload
+rCanMsgId = NO_CMD
+
+'*************MAIN_LOOP************************
+TOP:
+gosub SystemClockController
+motorCmd1+=1
+motorCmd2+=2
+GoSub ReadEncoder
+GoSub ReadVelocityValue
+GoSub ReadRawCAN
+GoSub HandleSendTimelyCanMsg
+
+goto TOP
+
+'********************************** 	SUB ROUTINE *************************************
+SystemClockController:
+	sysClkState = GetTimerState(0)
+	if(sysClkState=1) then'reset Timer 
+		SetTimerCount(0,SYSTEM_TIMER_COUNTS)
+		lastTimeSendTimelyCanMsg+=SYSTEM_TIMER_COUNTS
+	end if	
+RETURN
+
+ReadEncoder:
+	encoder1 = getvalue(_C,1)
+	encoder2 = getvalue(_C,2)
+RETURN
+
+ReadVelocityValue:
+	velo1=getvalue(_s,1)
+	velo2=getvalue(_s,2)
+RETURN
+
+'m1Cmd-2byte|enc1-2byte|m2cmd-2byte|enc2-2byte
+SendMotorInfo:
+	tStdi = nodeID
+	tDlc = 8
+	setcommand(_CS, 1, tStdi)
+	byte1 = motorCmd1 And 0xff
+	byte2 = motorCmd1 >> 8 And 0xff
+	setcommand(_CS, 3, byte1)
+	setcommand(_CS, 4, byte2)
+	
+	byte1 = encoder1 And 0xff
+	byte2 = encoder1 >> 8 And 0xff
+	setcommand(_CS, 5, byte1)
+	setcommand(_CS, 6, byte2)
+	
+	byte1 = motorCmd2 And 0xff
+	byte2 = motorCmd2 >> 8 And 0xff
+	setcommand(_CS, 7, byte1)
+	setcommand(_CS, 8, byte2)
+	
+	byte1 = encoder2 And 0xff
+	byte2 = encoder2 >> 8 And 0xff
+	setcommand(_CS, 9, byte1)
+	setcommand(_CS, 10, byte2)
+	
+	setcommand(_CS, 2, tDlc)
+return
+
+ReadRawCAN:
+	msgPEnding = getvalue(_CF)
+	If msgPEnding = 0 Then
+		rStid=0
+		rDlc=0
+	Else
+		'read the frame contents
+		rStid = getvalue(_CAN,1)'stdid
+		rDlc = getvalue(_CAN,2)
+		For i=0 AndWhile i<8
+			rData[i]=getvalue(_CAN,3+i)
+		Next
+'	print("ReadRawCAN\n")		
+	End If
+RETURN
+
+HandleSendTimelyCanMsg:
+	'send general info every 1s
+	currentTime = GetTimerCount(0)
+	deltaTime = lastTimeSendTimelyCanMsg - currentTime
+	if(deltaTime>1) then
+		gosub SendMotorInfo
+		print(motorCmd1,"|",motorCmd2,"\n")
+		lastTimeSendTimelyCanMsg=currentTime
+	end if
+return
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
